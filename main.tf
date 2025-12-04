@@ -119,7 +119,7 @@ resource "aws_ecs_task_definition" "order_service" {
   container_definitions = jsonencode([
     {
       name      = "order-service"
-      image     = var.order_service_image
+      image     = "381491863746.dkr.ecr.us-east-1.amazonaws.com/order-service:latest"
       essential = true
       portMappings = [
         {
@@ -154,7 +154,7 @@ resource "aws_ecs_task_definition" "channel_registry" {
   container_definitions = jsonencode([
     {
       name      = "channel-registry-service"
-      image     = var.channel_registry_image
+      image     = "381491863746.dkr.ecr.us-east-1.amazonaws.com/channel-registry-service:latest"
       essential = true
       portMappings = [
         {
@@ -180,14 +180,17 @@ resource "aws_ecs_task_definition" "order_query" {
   family                   = "order-query-service"
   network_mode             = "awsvpc"
   requires_compatibilities = ["FARGATE"]
-  cpu                      = "256"
-  memory                   = "512"
+  
+  # Aumentamos CPU y memoria porque ahora hay 2 contenedores
+  cpu                      = "512"
+  memory                   = "1024"
+
   execution_role_arn       = aws_iam_role.ecs_task_execution_role.arn
 
   container_definitions = jsonencode([
     {
       name      = "order-query-service"
-      image     = var.order_query_image
+      image     = "381491863746.dkr.ecr.us-east-1.amazonaws.com/order-query-service:latest"
       essential = true
       portMappings = [
         {
@@ -196,15 +199,37 @@ resource "aws_ecs_task_definition" "order_query" {
         }
       ]
       environment = [
-        # IMPORTANTE: aquí luego deberías poner el URL real de order-service (ALB o Service Discovery)
         { name = "ORDER_SERVICE_BASE_URL", value = "http://order-service:8000" },
-        { name = "MONGO_URL",              value = "mongodb://localhost:27017" },
-        { name = "MONGO_DB_NAME",          value = "orders_read" },
-        { name = "MONGO_COLLECTION",       value = "orders" }
+
+        # MONGO - AHORA VA A APUNTAR AL SEGUNDO CONTENEDOR
+        { name = "MONGO_URL",        value = "mongodb://monitoring_user:isis2503@localhost:27017" },
+        { name = "MONGO_DB_NAME",    value = "orders_read" },
+        { name = "MONGO_COLLECTION", value = "orders" }
+      ]
+    },
+
+    # =====================================
+    # SEGUNDO CONTENEDOR: Mongo
+    # =====================================
+    {
+      name      = "mongo"
+      image     = "mongo:7"           # Imagen oficial
+      essential = true
+      portMappings = [
+        {
+          containerPort = 27017
+          protocol      = "tcp"
+        }
+      ]
+      environment = [
+        { name = "MONGO_INITDB_ROOT_USERNAME", value = "monitoring_user" },
+        { name = "MONGO_INITDB_ROOT_PASSWORD", value = "isis2503" }
       ]
     }
   ])
 }
+
+
 
 # ==============================
 # Servicios ECS (uno por microservicio)
